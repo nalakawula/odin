@@ -24,12 +24,14 @@ class WebsiteController extends Controller
     {
         $this->panel = maelstrom(Website::class)
             ->setNameField('url')
+            ->setPerPage(20)
             ->setTableHeadings([
                 [
                     'name' => 'url',
                     'label' => 'Website',
                     'type' => 'EditLinkColumn',
                     'searchable' => true,
+                    'searchColumn' => 'url',
                 ],
                 [
                     'name' => 'ssl_enabled',
@@ -65,6 +67,12 @@ class WebsiteController extends Controller
                     'name' => 'crawler_enabled',
                     'type' => 'BooleanColumn',
                     'label' => 'Crawler',
+                    'align' => 'center',
+                ],
+                [
+                    'name' => 'visual_diff_enabled',
+                    'type' => 'BooleanColumn',
+                    'label' => 'Visual Diffs',
                     'align' => 'center',
                 ],
             ]);

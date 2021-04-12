@@ -16,11 +16,6 @@ class Kernel extends ConsoleKernel
         //
     ];
 
-    protected function scheduleTimezone()
-    {
-        return 'Europe/London';
-    }
-
     /**
      * Define the application's command schedule.
      *
@@ -32,9 +27,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('scan:uptime')->everyFiveMinutes()->withoutOverlapping()->runInBackground();
         $schedule->command('scan:robots')->hourly()->withoutOverlapping()->runInBackground();
         $schedule->command('scan:dns')->hourly()->withoutOverlapping()->runInBackground();
-        $schedule->command('scan:certificate')->dailyAt('08:00:00')->withoutOverlapping()->runInBackground();
+        $schedule->command('scan:certificates')->dailyAt('08:00:00')->withoutOverlapping()->runInBackground();
         $schedule->command('scan:opengraph')->dailyAt('08:00:00')->withoutOverlapping()->runInBackground();
         $schedule->command('scan:consoles')->daily()->withoutOverlapping();
+        $schedule->command('scan:visual-diffs')->daily()->withoutOverlapping();
+        $schedule->command('scan:crawler')->weekly()->withoutOverlapping();
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
     }
 

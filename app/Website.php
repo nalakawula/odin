@@ -7,6 +7,7 @@ use App\Jobs\DnsCheck;
 use App\Jobs\RobotsCheck;
 use App\Jobs\UptimeCheck;
 use App\Jobs\OpenGraphCheck;
+use App\Jobs\VisualDiffCheck;
 use App\Jobs\CertificateCheck;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +22,7 @@ class Website extends Model
     use HasOpenGraph;
     use HasCertificates;
     use HasCrawledPages;
+    use HasVisualDiffs;
 
     protected $fillable = [
         'url',
@@ -33,6 +35,8 @@ class Website extends Model
         'cron_enabled',
         'crawler_enabled',
         'cron_key',
+        'visual_diff_urls',
+        'visual_diff_enabled',
     ];
 
     protected static function boot()
@@ -63,6 +67,76 @@ class Website extends Model
     }
 
     /**
+     * @param $builder
+     * @param $type
+     */
+    public function scopeNotAlreadyQueued($builder, $type)
+    {
+        $builder->where('in_queue_' . $type, 0);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanCertificates($builder)
+    {
+        $builder->notAlreadyQueued('ssl')
+            ->where('ssl_enabled', 1);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanCrawl($builder)
+    {
+        $builder->notAlreadyQueued('crawler')
+            ->where('crawler_enabled', 1);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanDns($builder)
+    {
+        $builder->notAlreadyQueued('dns')
+            ->where('dns_enabled', 1);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanOpenGraph($builder)
+    {
+        $builder->notAlreadyQueued('og');
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanRobots($builder)
+    {
+        $builder->notAlreadyQueued('robots')
+            ->where('robots_enabled', 1);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanUptime($builder)
+    {
+        $builder->notAlreadyQueued('uptime')
+            ->where('uptime_enabled', 1);
+    }
+
+    /**
+     * @param $builder
+     */
+    public function scopeCanScanVisualDiffs($builder)
+    {
+        $builder->where('visual_diff_enabled', 1);
+    }
+
+    /**
      * Runs all the checks for the website.
      */
     public function runInitialScans()
@@ -85,9 +159,25 @@ class Website extends Model
             if ($this->uptime_enabled) {
                 UptimeCheck::dispatch($this);
             }
+
+            if ($this->visual_diff_enabled) {
+                VisualDiffCheck::dispatch($this);
+            }
         } catch (Exception $e) {
             logger($e->getMessage());
         }
+    }
+
+    public function queue(string $type)
+    {
+        $this->{'in_queue_' . $type} = 1;
+        $this->save();
+    }
+
+    public function unqueue(string $type)
+    {
+        $this->{'in_queue_' . $type} = 0;
+        $this->save();
     }
 
     /**

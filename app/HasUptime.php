@@ -6,7 +6,25 @@ use Illuminate\Support\Collection;
 
 trait HasUptime
 {
+    private $limitResults = true;
+
+    public function setLimitResults($state)
+    {
+        $this->limitResults = $state;
+    }
+
     public function uptimes()
+    {
+        $relationship = $this->hasMany(UptimeScan::class);
+
+        if ($this->limitResults) {
+            $relationship->where('created_at', '<', now()->addDays(31));
+        }
+
+        return $relationship->orderBy('created_at', 'desc');
+    }
+
+    public function unfilteredUptimes()
     {
         return $this->hasMany(UptimeScan::class)
             ->where('created_at', '<', now()->addDays(31))
@@ -17,7 +35,15 @@ trait HasUptime
     {
         if ($refreshCache) {
             cache()->forget($this->cache_key);
-            $this->load(['uptimes']);
+            $this->limitResults = false;
+
+            // For a bit of sanity and perf, we'll only take
+            // the results for the last X days.
+            $this->load(['uptimes' => function ($builder) {
+                $builder->whereDate('created_at', '>', now()->subDays(config('app.max_uptime_age')));
+            }]);
+
+            $this->limitResults = true;
         }
 
         return cache()->rememberForever($this->cache_key, function () {
@@ -68,9 +94,12 @@ trait HasUptime
 
     public function getUptimeAttribute()
     {
-        $latest = $this->uptimes->sortByDesc('created_at')->first();
-        $online = $this->uptimes->firstWhere('was_online', 1);
-        $offline = $this->uptimes->firstWhere('was_online', 0);
+        $child = Website::find($this->id);
+        $child->setLimitResults(false);
+
+        $latest = $child->uptimes()->orderBy('created_at')->take(1)->first();
+        $online = $child->uptimes()->firstWhere('was_online', 1);
+        $offline = $child->uptimes()->firstWhere('was_online', 0);
 
         if (!$latest) {
             return 'Still collecting data...';
@@ -212,12 +241,18 @@ trait HasUptime
     public function getTimeSpentOfflineAttribute()
     {
         $events = $this->recent_events;
+        $lastEvent = $events->first();
+
+        if ($lastEvent['state'] !== 'up') {
+            return now()->diffAsCarbonInterval($lastEvent['date'])->forHumans(['join' => true]);
+        }
+
         $downEvent = $events->firstWhere('state', 'down');
 
         if (!$downEvent) {
             return 'Unknown...';
         }
 
-        return $downEvent['duration'];
+        return $lastEvent['date']->diffAsCarbonInterval($downEvent['date'])->forHumans(['join' => true]);
     }
 }

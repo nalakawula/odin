@@ -2,9 +2,11 @@
 
 namespace App\Checkers;
 
+use Exception;
 use App\RobotScan;
 use GuzzleHttp\Client;
 use App\Website;
+use Illuminate\Support\Str;
 use SebastianBergmann\Diff\Differ;
 use App\Notifications\RobotsHasChanged;
 
@@ -13,6 +15,10 @@ class Robots
     private $website;
 
     private $scan;
+
+    private const RETRY_TIMES = 3;
+
+    private const RETRY_SLEEP_MILLISECONDS = 5000;
 
     public function __construct(Website $website)
     {
@@ -28,12 +34,24 @@ class Robots
 
     private function fetch()
     {
-        $client = new Client();
+        try {
+            $txt = retry(static::RETRY_TIMES, function () {
+                $response = (new Client)->request('GET', $this->website->robots_url);
 
-        $response = $client->request('GET', $this->website->robots_url);
+                $body = (string) $response->getBody();
+
+                if (Str::contains($body, 'cURL error')) {
+                    throw new Exception($body);
+                }
+
+                return $body;
+            }, static::RETRY_SLEEP_MILLISECONDS);
+        } catch (Exception $exception) {
+            $txt = $exception->getMessage();
+        }
 
         $scan = new RobotScan([
-            'txt' => (string) $response->getBody()
+            'txt' => $txt
         ]);
 
         $this->website->robots()->save($scan);
